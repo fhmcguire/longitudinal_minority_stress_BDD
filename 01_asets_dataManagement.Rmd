@@ -1,0 +1,611 @@
+---
+title: "Step 1: Data management"
+subtitle: "Longitudinal association of homonegative school climate with body dysmorphic disorder among cisgender sexual minority adolescents: Testing mediational effects of proximal stressors"
+author: "F. Hunter McGuire, MPH"
+date: "`r format(Sys.Date(), format='%B %d, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: false
+    theme: readable
+    highlight: zenburn
+urlcolor: blue
+editor_options: 
+  markdown: 
+    wrap: 72
+  chunk_output_type: console
+---
+
+# Load data and packages
+
+```{r setup, message=FALSE, warning=FALSE}
+
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+
+# load packages
+library(readxl) # load excel files
+library(tidyr) # data management tasks
+library(dplyr) # data management tasks
+library(mice) # multiple imputation with chained equations
+
+## set working directory to source file location
+### get full file path
+RMDpath <- rstudioapi::getSourceEditorContext()$path
+### remove file name from file path
+RMDpath <- gsub('/01_asets_dataManagement.Rmd','', RMDpath)
+### set the working directory
+setwd(RMDpath)
+
+# load full longitudinal data frame
+asets <- read_excel("asets_masterfile.xlsx")
+
+# set variable names to lowercase
+names(asets) <- tolower(names(asets))
+
+# limit data frame those who completed at least one wave from 4-6
+asets <- asets %>% 
+  filter(age_t4!=-99 | age_t5!=-99 | age_t6!=-99)
+
+```
+
+# Pre-imputation data management
+
+## Derive body dysmorphic disorder (BDD) measure
+
+```{r deriveBDD}
+
+asets <- asets %>% 
+  # define the 3-level BDD variable
+  # 0 = No BDD; 1 = BDD with thin/fat concerns; 2 = BDD with other concerns
+  mutate(
+  ##########
+  # Wave 4 #
+  ##########
+    bdd_t4 = case_when(
+      # No appearance concerns
+      bdd_1_t4==0 ~ 0, 
+      # appearance concerns, but no impairments
+      bdd_1_t4==1 & 
+        (bdd_2a_t4==0 & bdd_2b_t4==0 & bdd_2c_t4==0 & bdd_2d_t4==0) ~ 0,
+      # appearance concerns, but does not think about them "a lot"
+      bdd_1_t4==1 & (bdd_3_t4==0 | bdd_5_t4==1) ~ 0,
+      # BDD, thin/fat as primary concern
+      bdd_1_t4==1 & 
+        (bdd_2a_t4==1 | bdd_2b_t4==1 | bdd_2c_t4==1 | bdd_2d_t4==1) & 
+        bdd_3_t4==1 & bdd_4_t4==1 & bdd_5_t4>1 ~ 1,
+      #  BDD, other concerns
+      bdd_1_t4==1 & 
+        (bdd_2a_t4==1 | bdd_2b_t4==1 | bdd_2c_t4==1 | bdd_2d_t4==1) & 
+        bdd_3_t4==1 & bdd_4_t4==0 & bdd_5_t4>1 ~ 2), 
+  ##########
+  # Wave 5 #
+  ##########
+    bdd_t5 = case_when(
+      # No appearance concerns
+      bdd_1_t5==0 ~ 0, 
+      # appearance concerns, but no impairments
+      bdd_1_t5==1 & 
+        (bdd_2a_t5==0 & bdd_2b_t5==0 & bdd_2c_t5==0 & bdd_2d_t5==0) ~ 0,
+      # appearance concerns, but does not think about them "a lot"
+      bdd_1_t5==1 & (bdd_3_t5==0 | bdd_5_t5==1) ~ 0,
+      # BDD, thin/fat as primary concern
+      bdd_1_t5==1 & 
+        (bdd_2a_t5==1 | bdd_2b_t5==1 | bdd_2c_t5==1 | bdd_2d_t5==1) & 
+        bdd_3_t5==1 & bdd_4_t5==1 & bdd_5_t5>1 ~ 1, 
+      #  BDD, other concerns
+      bdd_1_t5==1 & 
+        (bdd_2a_t5==1 | bdd_2b_t5==1 | bdd_2c_t5==1 | bdd_2d_t5==1) & 
+        bdd_3_t5==1 & bdd_4_t5==0 & bdd_5_t5>1 ~ 2), 
+  ##########
+  # Wave 6 #
+  ##########
+    bdd_t6 = case_when(
+      # No appearance concerns
+      bdd_1_t6==0 ~ 0, 
+      # appearance concerns, but no impairments
+      bdd_1_t6==1 & 
+        (bdd_2a_t6==0 & bdd_2b_t6==0 & bdd_2c_t6==0 & bdd_2d_t6==0) ~ 0,
+      # appearance concerns, but does not think about them "a lot"
+      bdd_1_t6==1 & (bdd_3_t6==0 | bdd_5_t6==1) ~ 0,
+      # BDD, thin/fat as primary concern
+      bdd_1_t6==1 & 
+        (bdd_2a_t6==1 | bdd_2b_t6==1 | bdd_2c_t6==1 | bdd_2d_t6==1) & 
+        bdd_3_t6==1 & bdd_4_t6==1 & bdd_5_t6>1 ~ 1, 
+      # BDD, other concerns
+      bdd_1_t6==1 & 
+        (bdd_2a_t6==1 | bdd_2b_t6==1 | bdd_2c_t6==1 | bdd_2d_t6==1) & 
+        bdd_3_t6==1 & bdd_4_t6==0 & bdd_5_t6>1 ~ 2))
+
+```
+
+## Derive sexual minority adolescent stress inventory (SMASI) items
+
+```{r deriveMinorityStress}
+
+asets <- asets %>% 
+  # rename SMASI items to enhance readability
+  # set missing data (-88, -99) to NA
+  mutate(
+    # homonegative school climate - past 30 day (wave 4)
+    hsc1_t4 = case_when(sd31_t4==0 ~ 0, sd31_t4==1 ~ 1),
+    hsc2_t4 = case_when(sd33_t4==0 ~ 0, sd33_t4==1 ~ 1),
+    hsc3_t4 = case_when(sd34_t4==0 ~ 0, sd34_t4==1 ~ 1),
+    hsc4_t4 = case_when(sd35_t4==0 ~ 0, sd35_t4==1 ~ 1),
+    # homonegative school climate - past 30 day (wave 5)
+    hsc1_t5 = case_when(sd31_t5==0 ~ 0, sd31_t5==1 ~ 1),
+    hsc2_t5 = case_when(sd33_t5==0 ~ 0, sd33_t5==1 ~ 1),
+    hsc3_t5 = case_when(sd34_t5==0 ~ 0, sd34_t5==1 ~ 1),
+    hsc4_t5 = case_when(sd35_t5==0 ~ 0, sd35_t5==1 ~ 1),
+    # homonegative school climate - past 30 day (wave 6)
+    hsc1_t6 = case_when(sd31_t6==0 ~ 0, sd31_t6==1 ~ 1),
+    hsc2_t6 = case_when(sd33_t6==0 ~ 0, sd33_t6==1 ~ 1),
+    hsc3_t6 = case_when(sd34_t6==0 ~ 0, sd34_t6==1 ~ 1),
+    hsc4_t6 = case_when(sd35_t6==0 ~ 0, sd35_t6==1 ~ 1),
+    # internalized homonegativity - past 30 day (wave 4)
+    ih1_t4 = case_when(sd14_t4==0 ~ 0, sd14_t4==1 ~ 1),
+    ih2_t4 = case_when(sd15_t4==0 ~ 0, sd15_t4==1 ~ 1),
+    ih3_t4 = case_when(sd16_t4==0 ~ 0, sd16_t4==1 ~ 1),
+    ih4_t4 = case_when(sd17_t4==0 ~ 0, sd17_t4==1 ~ 1),
+    ih5_t4 = case_when(sd18_t4==0 ~ 0, sd18_t4==1 ~ 1),
+    ih6_t4 = case_when(sd19_t4==0 ~ 0, sd19_t4==1 ~ 1),
+    ih7_t4 = case_when(sd20_t4==0 ~ 0, sd20_t4==1 ~ 1),
+    # internalized homonegativity - past 30 day (wave 5)
+    ih1_t5 = case_when(sd14_t5==0 ~ 0, sd14_t5==1 ~ 1),
+    ih2_t5 = case_when(sd15_t5==0 ~ 0, sd15_t5==1 ~ 1),
+    ih3_t5 = case_when(sd16_t5==0 ~ 0, sd16_t5==1 ~ 1),
+    ih4_t5 = case_when(sd17_t5==0 ~ 0, sd17_t5==1 ~ 1),
+    ih5_t5 = case_when(sd18_t5==0 ~ 0, sd18_t5==1 ~ 1),
+    ih6_t5 = case_when(sd19_t5==0 ~ 0, sd19_t5==1 ~ 1),
+    ih7_t5 = case_when(sd20_t5==0 ~ 0, sd20_t5==1 ~ 1),
+    # internalized homonegativity - past 30 day (wave 6)
+    ih1_t6 = case_when(sd14_t6==0 ~ 0, sd14_t6==1 ~ 1),
+    ih2_t6 = case_when(sd15_t6==0 ~ 0, sd15_t6==1 ~ 1),
+    ih3_t6 = case_when(sd16_t6==0 ~ 0, sd16_t6==1 ~ 1),
+    ih4_t6 = case_when(sd17_t6==0 ~ 0, sd17_t6==1 ~ 1),
+    ih5_t6 = case_when(sd18_t6==0 ~ 0, sd18_t6==1 ~ 1),
+    ih6_t6 = case_when(sd19_t6==0 ~ 0, sd19_t6==1 ~ 1),
+    ih7_t6 = case_when(sd20_t6==0 ~ 0, sd20_t6==1 ~ 1),
+    # negative expectancies - past 30 day (wave 4)
+    ne1_t4 = case_when(sd4_t4==0 ~ 0, sd4_t4==1 ~ 1),
+    ne2_t4 = case_when(sd8_t4==0 ~ 0, sd8_t4==1 ~ 1),
+    ne3_t4 = case_when(sd9_t4==0 ~ 0, sd9_t4==1 ~ 1),
+    # negative expectancies - past 30 day (wave 5)
+    ne1_t5 = case_when(sd4_t5==0 ~ 0, sd4_t5==1 ~ 1),
+    ne2_t5 = case_when(sd8_t5==0 ~ 0, sd8_t5==1 ~ 1),
+    ne3_t5 = case_when(sd9_t5==0 ~ 0, sd9_t5==1 ~ 1),
+    # negative expectancies - past 30 day (wave 6)
+    ne1_t6 = case_when(sd4_t6==0 ~ 0, sd4_t6==1 ~ 1),
+    ne2_t6 = case_when(sd8_t6==0 ~ 0, sd8_t6==1 ~ 1),
+    ne3_t6 = case_when(sd9_t6==0 ~ 0, sd9_t6==1 ~ 1)) 
+
+```
+
+## Derive gender identity measure 
+
+```{r deriveGender}
+
+# take information from all 3 waves to re-code gender into:
+# 0 = cisgender girls/women
+# 1 = cisgender boys/men
+# 2 = transgender and gender expansive
+
+asets <- asets %>% 
+  mutate(
+  ##########
+  # Wave 4 #
+  ##########
+    gender_t4 = case_when(
+      gid_t4==0 & sab_t1==0 ~ 0, # cisgender girls
+      gid_t4==1 & sab_t1==1 ~ 1, # cisgender boys
+      gid_t4==2 | gid_t4==3 | gid_t4==4 | gid_t4==5 | gid_t4==6 ~ 2,
+      gid_t4==0 & sab_t1==1 ~ 2, # identify as girl, male sex at birth
+      gid_t4==1 & sab_t1==0 ~ 2, # identify as boy, female sex at birth
+      gid_t4==-99 ~ -99), # missing data
+  ##########
+  # Wave 5 #
+  ##########
+    gender_t5 = case_when(
+      gid_t5==0 & sab_t1==0 ~ 0, # cisgender girls
+      gid_t5==1 & sab_t1==1 ~ 1, # cisgender boys
+      gid_t5==2 | gid_t5==3 | gid_t5==4 | gid_t5==5 | gid_t5==6 ~ 2,
+      gid_t5==0 & sab_t1==1 ~ 2, # identify as girl, male sex at birth
+      gid_t5==1 & sab_t1==0 ~ 2, # identify as boy, female sex at birth
+      gid_t5==-99 ~ -99), # missing data
+  ##########
+  # Wave 6 #
+  ##########
+    gender_t6 = case_when(
+      gid_t6==0 & sab_t1==0 ~ 0, # cisgender girls
+      gid_t6==1 & sab_t1==1 ~ 1, # cisgender boys
+      gid_t6==2 | gid_t6==3 | gid_t6==4 | gid_t6==5 | gid_t6==6 ~ 2,
+      gid_t6==0 & sab_t1==1 ~ 2, # identify as girl, male sex at birth
+      gid_t6==1 & sab_t1==0 ~ 2, # identify as boy, female sex at birth
+      gid_t6==-99 ~ -99), # missing data
+    gender_allwave = case_when(
+      # cisgender girls/women
+      gender_t4==0 & gender_t5==0 & gender_t6==0 ~ 0, # cis w, cis w, cis w
+      gender_t4==0 & gender_t5==-99 & gender_t6==0 ~ 0, # cis w, NA, cis w
+      gender_t4==0 & gender_t5==0 & gender_t6==-99 ~ 0, # cis w, cis w, NA
+      gender_t4==0 & gender_t5==-99 & gender_t6==-99 ~ 0, # cis w, NA, NA
+      gender_t4==-99 & gender_t5==-99 & gender_t6==0 ~ 0, # NA, NA, cis w
+      gender_t4==-99 & gender_t5==0 & gender_t6==-99 ~ 0, # NA, cis w, NA
+      gender_t4==-99 & gender_t5==0 & gender_t6==0 ~ 0, # NA, cis m, cis m
+      # cisgender boys/men
+      gender_t4==1 & gender_t5==1 & gender_t6==1 ~ 1, # cis m, cis m, cis m
+      gender_t4==1 & gender_t5==-99 & gender_t6==1 ~ 1, # cis m, NA, cis m
+      gender_t4==1 & gender_t5==1 & gender_t6==-99 ~ 1, # cis m, cis m, NA
+      gender_t4==1 & gender_t5==-99 & gender_t6==-99 ~ 1, # cis m, NA, NA
+      gender_t4==-99 & gender_t5==-99 & gender_t6==1 ~ 1, # NA, NA, cis m
+      gender_t4==-99 & gender_t5==1 & gender_t6==-99 ~ 1, # NA, cis m, NA
+      gender_t4==-99 & gender_t5==1 & gender_t6==1 ~ 1, # NA, cis m, cis m
+      # transgender & gender expansive
+      gender_t4==2 | gender_t5==2 | gender_t6==2 ~ 2)) # TGE at any wave
+
+```
+
+## Derive age, urbanicity, and region variables
+
+```{r deriveAgeUrbanRegion}
+
+asets <- asets %>% 
+  # recode urban/rural and region variables
+  mutate(
+    urban = case_when(urban_t1==0 ~ 0, 
+                      urban_t1==1 ~ 1),
+    region = case_when(
+      region_t1==1 ~ 1,
+      region_t1==2 ~ 2,
+      region_t1==3 ~ 3,
+      region_t1==4 ~ 4,
+      region_t1==5 ~ 5)) %>% 
+  # recode missing age data using complete age data from other waves
+  mutate(
+  ##########
+  # Wave 4 #
+  ##########
+    age_t4 = case_when(
+      age_t4==14 ~ 14,
+      age_t4==15 ~ 15,
+      age_t4==16 ~ 16,
+      age_t4==17 ~ 17,
+      age_t4==18 ~ 18,
+      age_t4==19 ~ 19,
+      age_t4==-99 & age_t5==16 ~ 15,
+      age_t4==-99 & age_t5==17 ~ 16,
+      age_t4==-99 & age_t5==18 ~ 17,
+      age_t4==-99 & age_t5==19 ~ 18,
+      age_t4==-99 & age_t6==16 ~ 15,
+      age_t4==-99 & age_t6==17 ~ 16,
+      age_t4==-99 & age_t6==18 ~ 17,
+      age_t4==-99 & age_t6==19 ~ 18,
+      age_t4==-99 & age_t6==20 ~ 19),
+  ##########
+  # Wave 5 #
+  ##########
+    age_t5 = case_when(
+      age_t5==15 ~ 15,
+      age_t5==16 ~ 16,
+      age_t5==17 ~ 17,
+      age_t5==18 ~ 18,
+      age_t5==19 ~ 19,
+      age_t5==20 ~ 20,
+      age_t5==21 ~ 21,
+      age_t5==-99 & age_t4==15 ~ 16,
+      age_t5==-99 & age_t4==16 ~ 17,
+      age_t5==-99 & age_t4==17 ~ 18,
+      age_t5==-99 & age_t4==18 ~ 19,
+      age_t5==-99 & age_t4==19 ~ 20, 
+      age_t5==-99 & age_t6==16 ~ 15,
+      age_t5==-99 & age_t6==17 ~ 16,
+      age_t5==-99 & age_t6==18 ~ 17,
+      age_t5==-99 & age_t6==19 ~ 18,
+      age_t5==-99 & age_t6==20 ~ 19),
+  ##########
+  # Wave 6 #
+  ##########
+    age_t6 = case_when(
+      age_t6==16 ~ 16,
+      age_t6==17 ~ 17,
+      age_t6==18 ~ 18,
+      age_t6==19 ~ 19,
+      age_t6==20 ~ 20,
+      age_t6==21 ~ 21,
+      age_t6==22 ~ 22,
+      age_t6==-99 & age_t4==14 ~ 15,
+      age_t6==-99 & age_t4==15 ~ 16,
+      age_t6==-99 & age_t4==16 ~ 17,
+      age_t6==-99 & age_t4==17 ~ 18,
+      age_t6==-99 & age_t4==18 ~ 19, 
+      age_t6==-99 & age_t4==19 ~ 20,
+      age_t6==-99 & age_t5==16 ~ 17,
+      age_t6==-99 & age_t5==17 ~ 18,
+      age_t6==-99 & age_t5==18 ~ 19,
+      age_t6==-99 & age_t5==19 ~ 20,
+      age_t6==-99 & age_t5==20 ~ 21))
+
+```
+
+## Create a subset of the overall dataset
+
+```{r asetsSubset}
+
+# use select function to grab needed items for multiple imputation
+asetsSubset <- asets %>% 
+  dplyr::select(bdd_t4, bdd_t5, bdd_t6, 
+                hsc1_t4, hsc2_t4, hsc3_t4, hsc4_t4,
+                hsc1_t5, hsc2_t5, hsc3_t5, hsc4_t5,
+                hsc1_t6, hsc2_t6, hsc3_t6, hsc4_t6,
+                ih1_t4, ih2_t4, ih3_t4, ih4_t4, ih5_t4, ih6_t4, ih7_t4,
+                ih1_t5, ih2_t5, ih3_t5, ih4_t5, ih5_t5, ih6_t5, ih7_t5,
+                ih1_t6, ih2_t6, ih3_t6, ih4_t6, ih5_t6, ih6_t6, ih7_t6,
+                ne1_t4, ne2_t4, ne3_t4, 
+                ne1_t5, ne2_t5, ne3_t5,
+                ne1_t6, ne2_t6, ne3_t6,
+                urban, region,
+                race_t4, gender_allwave, sab_t1)
+
+# due to convergence issues, save the age variable as a data frame
+# merge back later on after mice imputation
+age <- asets %>% 
+  select(age_t4, age_t5, age_t6)
+
+regionUrban <- asets %>% 
+  select(region, urban)
+
+```
+
+# Multiple imputation with chained equations (mice)
+
+```{r mice, eval=FALSE}
+
+# extract variable names
+col_names <- names(asetsSubset)
+
+# reshape into a data frame
+impMethod <- as.data.frame(col_names) 
+
+# define imputation method for each variable
+impMethod <- impMethod %>% 
+  mutate(method = case_when(
+    grepl("bdd", col_names) ~ "polyreg", # polytomous regression (multinomial)
+    grepl("hsc", col_names) | 
+      grepl("ih", col_names) | 
+      grepl("ne", col_names) ~ "logreg", # logistic regression (binary)
+    col_names=="race_t4" | 
+      col_names=="gender_allwave" |
+      col_names=="sab_t1" | col_names=="urban" |
+      col_names=="region" ~ "" # no missing data
+  ))
+# save the imputation method list into a vector for use below
+impMethodList <- impMethod$method
+
+# convert all variables to factor/categorical format
+asetsSubset[,col_names] <- lapply(asetsSubset[,col_names], factor)
+
+# Run mice to generate 10 imputed data sets
+miceImputation <- mice(data=asetsSubset, 
+                       m=10, # 10 imputations
+                       maxit=10, # 10 iterations per imputation
+                       seed=828, # random seed for reproducible results
+                       method=impMethodList) # vector of imputation methods
+
+# Save mice output
+saveRDS(miceImputation, "miceImputation.RDS")
+
+```
+
+# Post-imputation data management
+
+```{r postMiceDataManagement}
+
+# load the imputed dataset
+miceImputation <- readRDS(file="miceImputation.RDS")
+
+# Extract all imputed data sets into a single, wide-format data frame
+imputed_wide <- complete(miceImputation, action = "long", include=TRUE) %>% 
+  select(-c(region))
+
+# merge with urban and region data
+
+# repeat the age variables to match the row length of the "imp" object
+# 11 times (10 imputed datasets + 1 original dataset)
+age_rbind <- rbind(age, age, age, age, age, 
+                   age, age, age, age, age,
+                   age)
+regionUrban_rbind <- rbind(regionUrban, regionUrban, regionUrban, regionUrban,
+                           regionUrban, regionUrban, regionUrban, regionUrban,
+                           regionUrban, regionUrban, regionUrban)
+
+# merge age variables back into this dataset
+imputed_wide <- cbind(imputed_wide, age_rbind, regionUrban_rbind)
+
+# convert all variables back to numeric format
+imputed_wide <- data.frame(lapply(imputed_wide, function(x) 
+  as.numeric(as.character(x))))
+
+```
+
+## Derive SMASI subscales, BDD indicators, and race/ethnicity indicators
+
+```{r smasiSubscales}
+
+# dervie SMASI subscale scores
+imputed_wide <- imputed_wide %>% 
+  # sum scores
+  mutate(
+    # homonegative school climate
+    hsccount_t4 = hsc1_t4+hsc2_t4+hsc3_t4+hsc4_t4,
+    hsccount_t5 = hsc1_t5+hsc2_t5+hsc3_t5+hsc4_t5,
+    hsccount_t6 = hsc1_t6+hsc2_t6+hsc3_t6+hsc4_t6,
+    # internalized homonegativity (wave 4)
+    ihcount_t4 = ih1_t4+ih2_t4+ih3_t4+ih4_t4+ih5_t4+ih6_t4+ih7_t4,
+    ihcount_t5 = ih1_t5+ih2_t5+ih3_t5+ih4_t5+ih5_t5+ih6_t5+ih7_t5,
+    ihcount_t6 = ih1_t6+ih2_t6+ih3_t6+ih4_t6+ih5_t6+ih6_t6+ih7_t6,
+    # negative expectancies (wave 4)
+    necount_t4 = ne1_t4+ne2_t4+ne3_t4,
+    necount_t5 = ne1_t5+ne2_t5+ne3_t5,
+    necount_t6 = ne1_t6+ne2_t6+ne3_t6
+  ) %>%
+  # percentage scores
+  mutate (
+    hscpct_t4 = (hsccount_t4/4)*10,
+    hscpct_t5 = (hsccount_t5/4)*10,
+    hscpct_t6 = (hsccount_t6/4)*10,
+    ihpct_t4 = (ihcount_t4/7)*10,
+    ihpct_t5 = (ihcount_t5/7)*10,
+    ihpct_t6 = (ihcount_t6/7)*10,
+    nepct_t4 = (necount_t4/3)*10,
+    nepct_t5 = (necount_t5/3)*10,
+    nepct_t6 = (necount_t6/3)*10
+  ) %>% 
+  # binary scores
+  mutate(
+    hscbinary_t4 = ifelse(hsccount_t4>=1, 1, 0),
+    hscbinary_t5 = ifelse(hsccount_t5>=1, 1, 0),
+    hscbinary_t6 = ifelse(hsccount_t6>=1, 1, 0),
+    ihbinary_t4 = ifelse(ihcount_t4>=1, 1, 0),
+    ihbinary_t5 = ifelse(ihcount_t5>=1, 1, 0),
+    ihbinary_t6 = ifelse(ihcount_t6>=1, 1, 0),
+    nebinary_t4 = ifelse(necount_t4>=1, 1, 0),
+    nebinary_t5 = ifelse(necount_t5>=1, 1, 0),
+    nebinary_t6 = ifelse(necount_t6>=1, 1, 0)
+  ) %>% 
+  # derive bdd total score (binary) from 3-level score
+  mutate(
+    # BDD with other concerns only
+    bddbin2_t4 = ifelse(bdd_t4==2, 1, 0), 
+    bddbin2_t5 = ifelse(bdd_t5==2, 1, 0),
+    bddbin2_t6 = ifelse(bdd_t6==2, 1, 0),
+    bddbin2_overall = ifelse(bddbin2_t4==1 | bddbin2_t5==1 | 
+                               bddbin2_t6==1, 1, 0), # any time point
+    bddbinThinFat_t4 = ifelse(bdd_t4==1 | bdd_t4==2, 1, 0),
+    bddbinThinFat_t5 = ifelse(bdd_t5==1 | bdd_t5==2, 1, 0),
+    bddbinThinFat_t6 = ifelse(bdd_t6==1 | bdd_t6==2, 1, 0),
+    bddbinThinFat_overall = ifelse(bddbinThinFat_t4==1 | bddbinThinFat_t5==1 | 
+                                     bddbinThinFat_t6==1, 1, 0) # any time point
+  ) %>% 
+  # white and POC indicator variables
+  mutate(
+    asian = ifelse(race_t4==2, 1, 0),
+    black = ifelse(race_t4==3, 1, 0),
+    white = ifelse(race_t4==4, 1, 0),
+    hispanic = ifelse(race_t4==5, 1, 0),
+    otherMultiracial = ifelse(race_t4==1 | race_t4==6, 1, 0)
+  ) %>% 
+  # gender indicator variables
+  mutate(
+    cisgenderGirl = ifelse(gender_allwave==0, 1, 0),
+    cisgenderBoy = ifelse(gender_allwave==1, 1, 0),
+    transgender = ifelse(gender_allwave==2, 1, 0)) %>% 
+  # create new PID variable equal to .id (needed later for pivot_longer)
+  mutate(pid = .id)
+
+```
+
+## Pivot from wide to long data format
+
+```{r pivotLonger}
+
+# define function to pivot data from wide to long format
+# Source: https://stats.stackexchange.com/questions/515598/is-it-possible-to-imput-values-using-mice-package-reshape-and-perform-gee-in-r
+working_dats <- list()
+for(i in 0:max(imputed_wide$.imp)) {
+  working_dats[[i+1]] <- 
+    imputed_wide %>%
+    subset(.imp == i) %>%
+    dplyr::select(.imp, .id, pid, race_t4, white, asian,
+                  black, hispanic, otherMultiracial,
+                  gender_allwave, cisgenderGirl, cisgenderBoy, transgender,
+                  region, urban, completeall, sab_t1,
+                  age_t4, age_t5, age_t6,
+                  ihcount_t4, ihcount_t5, ihcount_t6,
+                  necount_t4, necount_t5, necount_t6,
+                  hsccount_t4, hsccount_t5, hsccount_t6,
+                  ihpct_t4, ihpct_t5, ihpct_t6,
+                  nepct_t4, nepct_t5, nepct_t6,
+                  hscpct_t4, hscpct_t5, hscpct_t6,
+                  ihbinary_t4, ihbinary_t5, ihbinary_t6,
+                  nebinary_t4, nebinary_t5, nebinary_t6,
+                  hscbinary_t4, hscbinary_t5, hscbinary_t6,
+                  bddbin2_t4, bddbin2_t5, bddbin2_t6,
+                  bddbinThinFat_t4, bddbinThinFat_t5, bddbinThinFat_t6,
+                  bddbin2_overall, bddbinThinFat_overall) %>% 
+    mutate(pid = .id) %>% 
+    pivot_longer(cols = -c(.imp, .id, pid, race_t4, white, asian,
+                           black, hispanic, otherMultiracial,
+                           gender_allwave, cisgenderGirl, cisgenderBoy,
+                           transgender, region, urban, sab_t1, completeall,
+                           bddbin2_overall, bddbinThinFat_overall),
+               names_sep="_", names_to=c(".value", "grp")) %>%
+    mutate(pid = .id,
+           .id = 1:nrow(.),
+           time = case_when(
+             grp=="t4" ~ 0, # baseline
+             grp=="t5" ~ 0.5, # 6 months
+             grp=="t6" ~ 1 # 12 months
+           )) 
+}
+
+# save into long format
+imputed_long <- do.call(rbind, working_dats)
+
+```
+
+## Generate person mean-centered SMASI variables and grand mean-centered age variable
+
+```{r personMeanCenter}
+
+imputed_long <- imputed_long %>% 
+  # generate person-specific means for continuous variables
+  group_by(.imp, pid) %>% 
+  mutate(
+    personMean_hscpct = mean(hscpct, na.rm=TRUE),
+    personMean_ihpct = mean(ihpct, na.rm=TRUE),
+    personMean_nepct = mean(nepct, na.rm=TRUE),
+    personMean_hscbinary = mean(hscbinary, na.rm=TRUE),
+    personMean_ihbinary = mean(ihbinary, na.rm=TRUE),
+    personMean_nebinary = mean(nebinary, na.rm=TRUE)
+  ) %>% 
+  ungroup() %>% 
+  # generate grand mean age value by imputed dataset
+  group_by(.imp) %>% 
+  mutate(
+    grandMean_age = mean(age, na.rm=TRUE)
+  ) %>% 
+  ungroup() %>% 
+  # create person-centered variables by subtracting out person-specific means
+  mutate(
+    # continuous predictors
+    personMeanCenter_hscpct = hscpct - personMean_hscpct,
+    personMeanCenter_ihpct = ihpct - personMean_ihpct,
+    personMeanCenter_nepct = nepct - personMean_nepct,
+    grandMeanCenter_age = age - grandMean_age,
+    # binary predictors
+    personMeanCenter_hscbinary = hscbinary - personMean_hscbinary,
+    personMeanCenter_ihbinary = ihbinary - personMean_ihbinary,
+    personMeanCenter_nebinary = nebinary - personMean_nebinary)
+    
+```
+
+# Save the final data sets
+
+```{r saveData, eval=FALSE}
+# save the dataset in mids (imputed) format
+imputed_long <- as.mids(imputed_long)
+
+# cisgender data set
+imputed_long_cisgender <- imputed_long %>% 
+  filter(gender_allwave<2)
+
+# transgender data set
+imputed_long_transgender <- imputed_long %>% 
+  filter(gender_allwave==2)
+
+# Save the files!
+saveRDS(imputed_long, file="imputed_long.RDS")
+saveRDS(imputed_long_cisgender, file="imputed_long_cisgender.RDS")
+saveRDS(imputed_long_transgender, file="imputed_long_transgender.RDS")
+
+```
+
