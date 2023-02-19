@@ -1,0 +1,1254 @@
+---
+title: "Step 3: Summary and interpretation of results"
+subtitle: "Longitudinal association of homonegative school climate with body dysmorphic disorder among cisgender sexual minority adolescents: Testing mediational effects of proximal stressors"
+author: "F. Hunter McGuire, MPH"
+date: "`r format(Sys.Date(), format='%B %d, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: false
+    theme: readable
+    highlight: zenburn
+urlcolor: blue
+editor_options: 
+  markdown: 
+    wrap: 72
+  chunk_output_type: console
+---
+
+# Load data and packages
+
+```{r setup, message=FALSE, warning=FALSE}
+
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+
+# load packages
+library(tidyr) # data management tasks
+library(dplyr) # data management tasks
+library(mice) # multiple imputation with chained equations
+library(brms) # Bayesian regression modeling with Stan
+library(tidybayes) # tidy data for Bayesian models
+library(ggplot2) # plotting
+library(psych) # summary statistics
+library(bayesplot) # plotting Bayesian models and diagnostics
+library(miceadds) # correlations with 'mice' data
+library(openxlsx) # working with and formating .xlsx excel files
+
+
+## set working directory to source file location
+### get full file path
+RMDpath <- rstudioapi::getSourceEditorContext()$path
+### remove file name from file path
+RMDpath <- gsub('/03_asets_results.Rmd','', RMDpath)
+### set the working directory
+setwd(RMDpath)
+
+# load main data file
+imputed_long_cisgender <- readRDS("imputed_long_cisgender.rds")
+
+# load model fits
+fit_totalEffect <- 
+  readRDS(file="fits/main/fit_totalEffect.rds")
+fit_internalizedHomonegativity <- 
+  readRDS(file="fits/main/fit_internalizedHomonegativity.rds")
+fit_negativeExpectancies <- 
+  readRDS(file="fits/main/fit_negativeExpectancies.rds")
+fit_indirectOverall <- 
+  readRDS(file="fits/main/fit_indirectOverall.rds")
+
+```
+
+# Figure 1: Directed acyclic graph
+
+```{r dag}
+
+# load packages
+library(dagitty)
+library(rethinking)
+
+g <- dagitty('dag {
+    "Homonegative school climate" [exposure, pos="0,1"]
+    "Probable BDD" [outcome, pos="2,1"]
+    "Negative expectancies" [pos="0.8,0"]
+    "Internalized homonegativity" [pos="1,0.5"]
+    Age [pos="0.25,1.5"]
+    
+    "Homonegative school climate" -> "Probable BDD"
+    "Homonegative school climate" -> "Negative expectancies" -> "Probable BDD"
+    "Homonegative school climate" -> "Internalized homonegativity" -> "Probable BDD"
+    Age -> "Homonegative school climate"
+    Age -> "Internalized homonegativity"
+    Age -> "Negative expectancies"
+    Age -> "Probable BDD"
+}')
+
+
+drawdag(g,
+        goodarrow = TRUE,
+        lwd=2.5)
+
+```
+
+
+# Table 1: Sample characteristics
+
+## Time-varying
+
+```{r table1_timeVarying}
+
+# Calculate if participants screened positive for probable BDD at any time point
+bddOverall <- as.data.frame(matrix(nrow=1, ncol=4))
+colnames(bddOverall) <- c("Mean", "Lower bound", 
+                          "Upper bound", "Mean (95% CI)")
+bddbin2_overall <- summary(pool(with(imputed_long_cisgender, 
+                                     lm(bddbin2_overall*100~1))))
+bddOverall[1,1] <- bddbin2_overall[2]
+bddOverall[1,2] <- bddbin2_overall[2]-1.96*bddbin2_overall[3]
+bddOverall[1,3] <- bddbin2_overall[2]+1.96*bddbin2_overall[3]
+# round to 2 decimal places
+bddOverall <- round(bddOverall, 2)
+bddOverall[1,4] <- paste(bddOverall[1,1]," (",
+                         bddOverall[1,2],", ",
+                         bddOverall[1,3],")", sep="")
+
+################
+# Time varying #
+################
+
+timevary <- as.data.frame(matrix(nrow=15, ncol=4))
+colnames(timevary) <- c("Mean", "Lower bound", 
+                        "Upper bound", "Mean (95% CI)")
+
+# Probable BDD
+# time 0 (baseline)
+bddbin2_0 <- summary(pool(with(imputed_long_cisgender, 
+                               lm(bddbin2*100~1, subset=time==0))))
+timevary[1,1] <- bddbin2_0[2]
+timevary[1,2] <- bddbin2_0[2]-1.96*bddbin2_0[3]
+timevary[1,3] <- bddbin2_0[2]+1.96*bddbin2_0[3]
+# time 1 (6 month)
+bddbin2_1 <- summary(pool(with(imputed_long_cisgender, 
+                               lm(bddbin2*100~1, subset=time==0.5))))
+timevary[2,1] <- bddbin2_1[2]
+timevary[2,2] <- bddbin2_1[2]-1.96*bddbin2_1[3]
+timevary[2,3] <- bddbin2_1[2]+1.96*bddbin2_1[3]
+# time 2 (12 month)
+bddbin2_2 <- summary(pool(with(imputed_long_cisgender, 
+                               lm(bddbin2*100~1, subset=time==1))))
+timevary[3,1] <- bddbin2_2[2]
+timevary[3,2] <- bddbin2_2[2]-1.96*bddbin2_2[3]
+timevary[3,3] <- bddbin2_2[2]+1.96*bddbin2_2[3]
+
+# Homonegative school climate (HSC) percentage
+# time 0 (baseline)
+hscpct_0 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(hscpct*10~1, subset=time==0))))
+timevary[4,1] <- hscpct_0[2]
+timevary[4,2] <- hscpct_0[2]-1.96*hscpct_0[3]
+timevary[4,3] <- hscpct_0[2]+1.96*hscpct_0[3]
+# time 1 (6 month)
+hscpct_1 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(hscpct*10~1, subset=time==0.5))))
+timevary[5,1] <- hscpct_1[2]
+timevary[5,2] <- hscpct_1[2]-1.96*hscpct_1[3]
+timevary[5,3] <- hscpct_1[2]+1.96*hscpct_1[3]
+# time 2 (12 month)
+hscpct_2 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(hscpct*10~1, subset=time==1))))
+timevary[6,1] <- hscpct_2[2]
+timevary[6,2] <- hscpct_2[2]-1.96*hscpct_2[3]
+timevary[6,3] <- hscpct_2[2]+1.96*hscpct_2[3]
+
+# Internalized homonegativity (IH) percentage variable
+# time 0 (baseline)
+ihpct_0 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(ihpct*10~1, subset=time==0))))
+timevary[7,1] <- ihpct_0[2]
+timevary[7,2] <- ihpct_0[2]-1.96*ihpct_0[3]
+timevary[7,3] <- ihpct_0[2]+1.96*ihpct_0[3]
+# time 1 (6 month)
+ihpct_1 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(ihpct*10~1, subset=time==0.5))))
+timevary[8,1] <- ihpct_1[2]
+timevary[8,2] <- ihpct_1[2]-1.96*ihpct_1[3]
+timevary[8,3] <- ihpct_1[2]+1.96*ihpct_1[3]
+# time 2 (12 month)
+ihpct_2 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(ihpct*10~1, subset=time==1))))
+timevary[9,1] <- ihpct_2[2]
+timevary[9,2] <- ihpct_2[2]-1.96*ihpct_2[3]
+timevary[9,3] <- ihpct_2[2]+1.96*ihpct_2[3]
+
+
+# Negative expectancies (NE) percentage variable
+# time 0 (baseline)
+nepct_0 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(nepct*10~1, subset=time==0))))
+timevary[10,1] <- nepct_0[2]
+timevary[10,2] <- nepct_0[2]-1.96*nepct_0[3]
+timevary[10,3] <- nepct_0[2]+1.96*nepct_0[3]
+# time 1 (6 month)
+nepct_1 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(nepct*10~1, subset=time==0.5))))
+timevary[11,1] <- nepct_1[2]
+timevary[11,2] <- nepct_1[2]-1.96*nepct_1[3]
+timevary[11,3] <- nepct_1[2]+1.96*nepct_1[3]
+# time 2 (12 month)
+nepct_2 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(nepct*10~1, subset=time==1))))
+timevary[12,1] <- nepct_2[2]
+timevary[12,2] <- nepct_2[2]-1.96*nepct_2[3]
+timevary[12,3] <- nepct_2[2]+1.96*nepct_2[3]
+
+
+# Age
+# time 0 (baseline)
+age_0 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(age~1, subset=time==0))))
+timevary[13,1] <- age_0[2]
+timevary[13,2] <- age_0[2]-1.96*age_0[3]
+timevary[13,3] <- age_0[2]+1.96*age_0[3]
+# time 1 (6 month)
+age_1 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(age~1, subset=time==0.5))))
+timevary[14,1] <- age_1[2]
+timevary[14,2] <- age_1[2]-1.96*age_1[3]
+timevary[14,3] <- age_1[2]+1.96*age_1[3]
+# time 2 (12 month)
+age_2 <- summary(pool(with(imputed_long_cisgender, 
+                              lm(age~1, subset=time==1))))
+timevary[15,1] <- age_2[2]
+timevary[15,2] <- age_2[2]-1.96*age_2[3]
+timevary[15,3] <- age_2[2]+1.96*age_2[3]
+
+# Round all to 2 decimal points
+timevary <- round(timevary, 2)
+# create combined means + 95% CI in one cell
+combine <- function(row) {
+  timevary[row,4] <- paste(timevary[row,1]," (",
+                           timevary[row,2],", ",
+                           timevary[row,3],")", sep="")
+}
+timevary[1,4] <- combine(row=1)
+timevary[2,4] <- combine(row=2)
+timevary[3,4] <- combine(row=3)
+timevary[4,4] <- combine(row=4)
+timevary[5,4] <- combine(row=5)
+timevary[6,4] <- combine(row=6)
+timevary[7,4] <- combine(row=7)
+timevary[8,4] <- combine(row=8)
+timevary[9,4] <- combine(row=9)
+timevary[10,4] <- combine(row=10)
+timevary[11,4] <- combine(row=11)
+timevary[12,4] <- combine(row=12)
+timevary[13,4] <- combine(row=13)
+timevary[14,4] <- combine(row=14)
+timevary[15,4] <- combine(row=15)
+
+
+
+timevary_col1 <- c("",
+                   "Probable BDD (%)",
+                   "Homonegative school climate (%)",
+                   "Internalized homonegativity (%)",
+                   "Negative expectancies (%)",
+                   "Age (years), range=14-22")
+timevary_col2 <- c("Mean (95% CI)",
+                   timevary[1,4],
+                   timevary[4,4],
+                   timevary[7,4],
+                   timevary[10,4],
+                   timevary[13,4])
+timevary_col3 <- c("",
+                   timevary[2,4],
+                   timevary[5,4],
+                   timevary[8,4],
+                   timevary[11,4],
+                   timevary[14,4])
+timevary_col4 <- c("",
+                   timevary[3,4],
+                   timevary[6,4],
+                   timevary[9,4],
+                   timevary[12,4],
+                   timevary[15,4])
+
+timevaryTable <- cbind(timevary_col1, timevary_col2,
+                       timevary_col3, timevary_col4)
+
+
+```
+
+## Time-invariant
+
+```{r}
+
+##################
+# Time-invariant #
+##################
+
+
+# subset data for cisgender participants
+cisgenderSample <- complete(imputed_long_cisgender, action="long",
+                            include=TRUE) %>% 
+  filter(.imp==0) %>% 
+  mutate(wave = case_when(
+    time==0 ~ "t4",
+    time==0.5 ~ "t5",
+    time==1 ~ "t6"
+  )) %>% 
+  select(pid, wave, race_t4, gender_allwave, urban, region) %>% 
+  pivot_wider(id_cols=pid,
+              names_from=wave,
+              values_from=c(race_t4, gender_allwave, urban, region)) %>% 
+  mutate(race = race_t4_t4,
+         gender = gender_allwave_t4,
+         urban = urban_t4,
+         region = region_t4) %>% 
+  select(race, gender, urban, region)
+
+# Race/ethnicity
+racecount <- 
+  as.vector(table(cisgenderSample$race))
+raceprop <- 
+  as.vector(round(prop.table(table(cisgenderSample$race))*100,2))
+# Gender
+gendercount <- 
+  as.vector(table(cisgenderSample$gender))
+genderprop <- 
+  as.vector(round(prop.table(table(cisgenderSample$gender))*100,2))
+# Geographic region
+regioncount <- 
+  as.vector(table(cisgenderSample$region))
+regionprop <- 
+  as.vector(round(prop.table(table(cisgenderSample$region))*100,2))
+# Urbanicity
+urbancount <- 
+  as.vector(table(cisgenderSample$urban))
+urbanprop <- 
+  as.vector(round(prop.table(table(cisgenderSample$urban))*100,2))
+
+
+# Create table of time-varying data
+table1bcol1 <- c("Characteristic",
+                "Gender",
+                "   Cisgender boy/man",
+                "   Cisgender girl/woman",
+                "Race/ethnicity",
+                "   Asian or Pacific Islander",
+                "   Black or African-American",
+                "   Hispanic",
+                "   Multiracial",
+                "   Native American or Alaska Native",
+                "   White",
+                "U.S. geographic region",
+                "   West",
+                "   Southwest",
+                "   Midwest",
+                "   Southeast",
+                "   Northeast",
+                "Urbanicity",
+                "   Urban",
+                "   Rural")
+table1bcol2 <- c("n (%)",
+                 "",
+                 paste(gendercount[2]," (",
+                       genderprop[2],")",
+                       sep=""),
+                 paste(gendercount[1]," (",
+                       genderprop[1],")",
+                       sep=""),
+                 "",
+                 paste(racecount[2]," (",
+                       raceprop[2],")",
+                       sep=""),
+                 paste(racecount[3]," (",
+                       raceprop[3],")",
+                       sep=""),
+                 paste(racecount[5]," (",
+                       raceprop[5],")",
+                       sep=""),
+                 paste(racecount[6]," (",
+                       raceprop[6],")",
+                       sep=""),
+                 paste(racecount[1]," (",
+                       raceprop[1],")",
+                       sep=""),
+                 paste(racecount[4]," (",
+                       raceprop[4],")",
+                       sep=""),
+                 "",
+                 paste(regioncount[1]," (",
+                       regionprop[1],")",
+                       sep=""),
+                 paste(regioncount[2]," (",
+                       regionprop[2],")",
+                       sep=""),
+                 paste(regioncount[3]," (",
+                       regionprop[3],")",
+                       sep=""),
+                 paste(regioncount[4]," (",
+                       regionprop[4],")",
+                       sep=""),
+                 paste(regioncount[5]," (",
+                       regionprop[5],")",
+                       sep=""),
+                 "",
+                 paste(urbancount[2]," (",
+                       urbanprop[2],")",
+                       sep=""),
+                 paste(urbancount[1]," (",
+                       urbanprop[1],")",
+                       sep="")
+                 )
+# combine into one data frame
+table1invariant <- as.data.frame(cbind(table1bcol1, 
+                                       table1bcol2))
+```
+
+
+# Table 2: Correlation matrix
+
+```{r}
+
+# Convert to wide data format
+imputed_wide_cisgender <- 
+  complete(imputed_long_cisgender, action="long", include=TRUE) %>% 
+  mutate(wave = case_when(
+    time==0 ~ "t4",
+    time==0.5 ~ "t5",
+    time==1 ~ "t6")) %>% 
+  select(.imp, pid, wave, bddbin2, personMeanCenter_hscpct,
+         personMeanCenter_ihpct, personMeanCenter_nepct, 
+         grandMeanCenter_age) %>% 
+  pivot_wider(., 
+              id_cols = c(".imp", "pid"),
+              names_from = wave,
+              names_sep = "_",
+              values_from = c("bddbin2", "personMeanCenter_hscpct",
+                              "personMeanCenter_ihpct", 
+                              "personMeanCenter_nepct", 
+                              "grandMeanCenter_age")) %>% 
+  mutate(.id = pid) %>% 
+  select(-c(pid))
+# return to mids (mice) format
+imputed_wide_cisgender <- as.mids(imputed_wide_cisgender)
+
+
+# calculate correlations
+# pearson = continuous*continuous
+# point-biserial = categorical*continuous
+correlations_raw <- micombine.cor(imputed_wide_cisgender,
+                              method="pearson")
+correlations <- as.data.frame(attr(correlations_raw, "r_matrix")) %>% 
+  # rearrange columns by time point
+  select(bddbin2_t4, personMeanCenter_hscpct_t4, personMeanCenter_ihpct_t4,
+         personMeanCenter_nepct_t4, grandMeanCenter_age_t4,
+         bddbin2_t5, personMeanCenter_hscpct_t5, personMeanCenter_ihpct_t5,
+         personMeanCenter_nepct_t5, grandMeanCenter_age_t5,
+         bddbin2_t6, personMeanCenter_hscpct_t6, personMeanCenter_ihpct_t6,
+         personMeanCenter_nepct_t6, grandMeanCenter_age_t6) 
+# create matrix of correlation coefficients
+correlationMatrix <- as.data.frame(matrix(nrow=15, ncol=15))
+# rearrange rows by time point
+correlationMatrix[1,] <- correlations[1,]
+correlationMatrix[2,] <- correlations[4,]
+correlationMatrix[3,] <- correlations[7,]
+correlationMatrix[4,] <- correlations[10,]
+correlationMatrix[5,] <- correlations[13,]
+correlationMatrix[6,] <- correlations[2,]
+correlationMatrix[7,] <- correlations[5,]
+correlationMatrix[8,] <- correlations[8,]
+correlationMatrix[9,] <- correlations[11,]
+correlationMatrix[10,] <- correlations[14,]
+correlationMatrix[11,] <- correlations[3,]
+correlationMatrix[12,] <- correlations[6,]
+correlationMatrix[13,] <- correlations[9,]
+correlationMatrix[14,] <- correlations[12,]
+correlationMatrix[15,] <- correlations[15,]
+# round coefficients to 2 decimal places and remove leading zeros
+correlationMatrix <- data.frame(
+  lapply(correlationMatrix, 
+         function(x) 
+           gsub("^0\\.", "\\.", 
+           gsub("^-0\\.", "-\\.", as.character(format(round(x,2),2))))),
+  stringsAsFactors = FALSE)
+# set values to NA for duplicate correlation data
+correlationMatrix[c(2:15),1] <- NA
+correlationMatrix[c(3:15),2] <- NA
+correlationMatrix[c(4:15),3] <- NA
+correlationMatrix[c(5:15),4] <- NA
+correlationMatrix[c(6:15),5] <- NA
+correlationMatrix[c(7:15),6] <- NA
+correlationMatrix[c(8:15),7] <- NA
+correlationMatrix[c(9:15),8] <- NA
+correlationMatrix[c(10:15),9] <- NA
+correlationMatrix[c(11:15),10] <- NA
+correlationMatrix[c(12:15),11] <- NA
+correlationMatrix[c(13:15),12] <- NA
+correlationMatrix[c(14:15),13] <- NA
+correlationMatrix[c(15),14] <- NA
+# set autocorrelations equal to "---", otherwise leave it alone
+correlationMatrix <- data.frame(
+  lapply(correlationMatrix, 
+         function(x) 
+           ifelse(x == "1.00", "---", x)),
+  stringsAsFactors = FALSE)
+#
+correlationMatrix <- correlationMatrix %>% 
+  mutate(.before=1,
+         ID = c("BDD", "HSC", "IH", "NE", "Age",
+                "BDD", "HSC", "IH", "NE", "Age",
+                "BDD", "HSC", "IH", "NE", "Age"))
+# set row and column names
+matrixNames <- c("", "BDD", "HSC", "IH", "NE", "Age",
+                 "BDD", "HSC", "IH", "NE", "Age",
+                 "BDD", "HSC", "IH", "NE", "Age")
+colnames(correlationMatrix) <- matrixNames
+
+
+
+# Get table of p-values
+correlations_pvalues <- correlations_raw %>% 
+  select(variable1, variable2, p) %>% 
+  mutate(p = round(p,4)) %>% 
+  filter(p<=0.05)
+
+
+```
+
+```{r table2}
+
+# export to excel .xlsx format
+library(openxlsx)
+
+# save xlsx file
+openxlsx::write.xlsx(correlationMatrix, file="tables_figures/table2.xlsx")
+# reload into R in xlsx format
+wb <- openxlsx::loadWorkbook(file="tables_figures/table2.xlsx")
+# set column width for PARAMETER to 40
+openxlsx::setColWidths(wb, 
+                       sheet = 1,
+                       cols = 1:15, 
+                       widths=9)
+# change font size to 10 with Arial style
+modifyBaseFont(wb, 
+               fontSize = 10, 
+               fontColour = "black", 
+               fontName = "Times New Roman")
+
+# bold text
+boldStyle <- createStyle(textDecoration = "Bold")
+# center-aligned text
+centerStyle <- createStyle(halign = "CENTER")
+# bold and center-aligned
+boldCenterStyle <- createStyle(textDecoration = "Bold",
+                               halign = "CENTER")
+
+# apply styles
+addStyle(wb,
+         cols = 2:16,
+         rows = 1:16,
+         sheet = 1,
+         style = centerStyle,
+         gridExpand = TRUE)
+
+# save the final excel workbook
+openxlsx::saveWorkbook(wb, 
+                       file="tables_figures/table2.xlsx", 
+                       overwrite = TRUE)
+```
+
+
+
+
+# Table 3: Regression output
+
+## Calcluate fixed effects coefficients (Risk ratios)
+
+```{r}
+fixedEffects <- as.data.frame(matrix(nrow=16, ncol=3))
+colnames(fixedEffects) <- c("RR", "LB", "UB")
+rownames(fixedEffects) <- c("Model 1: pmc HSC",
+                            "Model 1: pm HSC",
+                            "Model 2: pmc HSC", 
+                            "Model 2: pmc IH",
+                            "Model 2: pm HSC",
+                            "Model 2: pm IH",
+                            "Modle 3: pmc HSC",
+                            "Model 3: pmc NE",
+                            "Model 3: pm HSC",
+                            "Model 3: pm NE",
+                            "Model 4: pmc HSC",
+                            "Model 4: pmc IH",
+                            "Model 4: pmc NE",
+                            "Model 4: pm HSC",
+                            "Model 4: pm IH",
+                            "Model 4: pm NE")
+# Model 1
+fixedEffects[1,] <- exp(fixef(fit_totalEffect)[3,c(1,3,4)])
+fixedEffects[2,] <- exp(fixef(fit_totalEffect)[4,c(1,3,4)])
+# Model 2
+fixedEffects[3,] <- exp(fixef(fit_internalizedHomonegativity)[3,c(1,3,4)])
+fixedEffects[4,] <- exp(fixef(fit_internalizedHomonegativity)[5,c(1,3,4)])
+fixedEffects[5,] <- exp(fixef(fit_internalizedHomonegativity)[4,c(1,3,4)])
+fixedEffects[6,] <- exp(fixef(fit_internalizedHomonegativity)[6,c(1,3,4)])
+# Model 3
+fixedEffects[7,] <- exp(fixef(fit_negativeExpectancies)[3,c(1,3,4)])
+fixedEffects[8,] <- exp(fixef(fit_negativeExpectancies)[5,c(1,3,4)])
+fixedEffects[9,] <- exp(fixef(fit_negativeExpectancies)[4,c(1,3,4)])
+fixedEffects[10,] <- exp(fixef(fit_negativeExpectancies)[6,c(1,3,4)])
+# Model 4
+fixedEffects[11,] <- exp(fixef(fit_indirectOverall)[3,c(1,3,4)])
+fixedEffects[12,] <- exp(fixef(fit_indirectOverall)[5,c(1,3,4)])
+fixedEffects[13,] <- exp(fixef(fit_indirectOverall)[7,c(1,3,4)])
+fixedEffects[14,] <- exp(fixef(fit_indirectOverall)[4,c(1,3,4)])
+fixedEffects[15,] <- exp(fixef(fit_indirectOverall)[6,c(1,3,4)])
+fixedEffects[16,] <- exp(fixef(fit_indirectOverall)[8,c(1,3,4)])
+# combine means and 95% CI into one column
+fixedEffects <- fixedEffects %>% 
+  mutate(combined = 
+           paste(
+             format(round(RR,2),nsmall=2), 
+             " (", 
+             format(round(LB,2),nsmall=2),
+             ", ", 
+             format(round(UB,2),nsmall=2),
+             ")", 
+             sep=""))
+
+```
+
+
+## Calculate Level 2 variance estimates
+
+```{r betweenPersonVariance}
+
+# define parameter names
+HSCvar <- "sd_pid__personMeanCenter_hscpct"
+IHvar <- "sd_pid__personMeanCenter_ihpct"
+NEvar <- "sd_pid__personMeanCenter_nepct"
+
+# extract level 2 variance for each parameter
+# squared (^2) because the default is standard deviation
+model1_HSCvar <- 
+  posterior_samples(fit_totalEffect, 
+                     pars=c(HSCvar))[[1]]^2
+model2_HSCvar <- 
+  posterior_samples(fit_internalizedHomonegativity, 
+                     pars=c(HSCvar))[[1]]^2
+model2_IHvar <- 
+  posterior_samples(fit_internalizedHomonegativity, 
+                     pars=c(IHvar))[[1]]^2
+model3_HSCvar <- 
+  posterior_samples(fit_negativeExpectancies, 
+                     pars=c(HSCvar))[[1]]^2
+model3_NEvar <- 
+  posterior_samples(fit_negativeExpectancies, 
+                     pars=c(NEvar))[[1]]^2
+model4_HSCvar <- 
+  posterior_samples(fit_indirectOverall, 
+                     pars=c(HSCvar))[[1]]^2
+model4_IHvar <- 
+  posterior_samples(fit_indirectOverall, 
+                     pars=c(IHvar))[[1]]^2
+model4_NEvar <- 
+  posterior_samples(fit_indirectOverall, 
+                     pars=c(NEvar))[[1]]^2
+
+
+
+# Create a matrix called "variance" to hold Level 2 variance estimates
+variance <- matrix(nrow=8, ncol=1)
+colnames(variance) <- c("variance")
+rownames(variance) <- c("Model 1: HSC",
+                        "Model 2: HSC", 
+                        "Model 2: IH",
+                        "Modle 3: HSC",
+                        "Model 3: NE",
+                        "Model 4: HSC",
+                        "Model 4: IH",
+                        "Model 4: NE")
+# assign variance values to each cell
+variance[1] <- round(mean(model1_HSCvar),4)
+variance[2] <- round(mean(model2_HSCvar),4)
+variance[3] <- round(mean(model2_IHvar),4)
+variance[4] <- round(mean(model3_HSCvar),4)
+variance[5] <- round(mean(model3_NEvar),4)
+variance[6] <- round(mean(model4_HSCvar),4)
+variance[7] <- round(mean(model4_IHvar),4)
+variance[8] <- round(mean(model4_NEvar),4)
+
+```
+
+
+## Calcluate indirect effect estimates and percentage mediated
+
+```{r extractPosteriorDistributions}
+
+# Name of the primary parameter of interest
+# Person mean-centered homonegative school climate
+HSC <- "b_personMeanCenter_hscpct"
+
+# Extract estimates for this parameter from each model fit into numeric vector
+model1_beta_samples <- 
+  (posterior_samples(fit_totalEffect, 
+                    pars=c(HSC)))[[1]]
+model2_beta_samples <- 
+  posterior_samples(fit_internalizedHomonegativity,
+                    pars=c(HSC))[[1]]
+model3_beta_samples <- 
+  posterior_samples(fit_negativeExpectancies, 
+                    pars=c(HSC))[[1]]
+model4_beta_samples <- 
+  posterior_samples(fit_indirectOverall, 
+                    pars=c(HSC))[[1]]
+
+# Use the difference method to calculate indirect effects
+# subtract Model 2-4 beta post. distributions from Model 1 post. distributions
+model2_difference <- model1_beta_samples - model2_beta_samples
+model3_difference <- model1_beta_samples - model3_beta_samples
+model4_difference <- model1_beta_samples - model4_beta_samples
+
+# calculate percentage mediated for each model (relative to Model 1)
+model2_percent <- model2_difference/model1_beta_samples
+model3_percent <- model3_difference/model1_beta_samples
+model4_percent <- model4_difference/model1_beta_samples
+
+
+# Create a matrix called "percent" to hold indirect effect estimates
+indirect <- as.data.frame(matrix(nrow=3, ncol=3))
+colnames(indirect) <- c("mean", "LB", "UB")
+rownames(indirect) <- c("Model 2",
+                        "Model 3",
+                        "Model 4")
+# Calculate indirect effect estimates for Models 2, 3, and 4
+# Model 2
+indirect[1,1] <- exp(mean(model2_difference))
+indirect[1,2:3] <- exp(quantile(model2_difference, 
+                                      probs=c(0.025,0.975)))
+# Model 3
+indirect[2,1] <- exp(mean(model3_difference))
+indirect[2,2:3] <- exp(quantile(model3_difference, 
+                                      probs=c(0.025,0.975)))
+# Model 4
+indirect[3,1] <- exp(mean(model4_difference))
+indirect[3,2:3] <- exp(quantile(model4_difference, 
+                                      probs=c(0.025,0.975)))
+# combine means and 95% CI into one column
+indirect <- indirect %>% 
+  mutate(combined = 
+           paste(
+             format(round(mean,2),nsmall=2), 
+             " (", 
+             format(round(LB,2),nsmall=2),
+             ", ", 
+             format(round(UB,2),nsmall=2),
+             ")", 
+             sep=""))
+
+
+
+# Create a matrix called "percent" to hold percentage mediated estimates
+percent <- as.data.frame(matrix(nrow=3, ncol=3))
+colnames(percent) <- c("mean", "LB", "UB")
+rownames(percent) <- c("Model 2",
+                       "Model 3",
+                       "Model 4")
+# Calculate percentage mediated for Models 2, 3, and 4
+# Model 2
+percent[1,1] <- mean(model2_percent)*100
+percent[1,2:3] <- quantile(model2_IDE, probs=c(0.025,0.975))*100
+# Model 3
+percent[2,1] <- mean(model3_percent)*100
+percent[2,2:3] <- quantile(model3_IDE, probs=c(0.025,0.975))*100
+# Model 4 
+percent[3,1] <- mean(model4_percent)*100
+percent[3,2:3] <- quantile(model4_IDE, probs=c(0.025,0.975))*100
+# combine means and 95% CI into one column
+percent <- percent %>% 
+  mutate(combined = 
+           paste(
+             format(round(mean,1),nsmall=1), 
+             "% (", 
+             format(round(LB,1),nsmall=1),
+             ", ", 
+             format(round(UB,1),nsmall=1),
+             ")", 
+             sep=""))
+
+```
+
+
+## Create and Export Table 3
+
+```{r table3}
+
+# parameter names
+table3_params <-  c("Model 1",
+                    "PMC Homonegative school climate, RR (95% CI)",
+                    "    Random slopes variance",
+                    "",
+                    "Model 2",
+                    "PMC Homonegative school climate, RR (95% CI)",
+                    "    Random slopes variance",
+                    "PMC Internalized homonegativity, RR (95% CI)",
+                    "    Random slopes variance",
+                    "Percentage of total effect mediated (95% CI)",
+                    "",
+                    "Model 3",
+                    "PMC Homonegative school climate, RR (95% CI)",
+                    "    Random slopes variance",
+                    "PMC Negative expectancies, RR (95% CI)",
+                    "    Random slopes variance",
+                    "Percentage of total effect mediated (95% CI)",
+                    "",
+                    "Model 4",
+                    "Homonegative school climate, RR (95% CI)",
+                    "    Random slopes variance",
+                    "Internalized homonegativity, RR (95% CI)",
+                    "    Random slopes variance",
+                    "Negative expectancies, RR (95% CI)",
+                    "    Random slopes variance",
+                    "Percentage of total effect mediated (95% CI)")
+# model estimates
+table3_estimates <- c("",
+                      fixedEffects[1,4],
+                      variance[1],
+                      "",
+                      "",
+                      fixedEffects[3,4],
+                      variance[2],
+                      fixedEffects[4,4],
+                      variance[3],
+                      percent[1,4],
+                      "",
+                      "",
+                      fixedEffects[7,4],
+                      variance[4],
+                      fixedEffects[8,4],
+                      variance[5],
+                      percent[2,4],
+                      "",
+                      "",
+                      fixedEffects[11,4],
+                      variance[6],
+                      fixedEffects[12,4],
+                      variance[7],
+                      fixedEffects[13,4],
+                      variance[8],
+                      percent[3,4])
+# combine columns into one table
+table3 <- as.data.frame(cbind(table3_params, table3_estimates))
+# change column names
+colnames(table3) <- c("Parameters", "Estimates")
+
+# load library
+library(openxlsx)
+
+# save xlsx file
+openxlsx::write.xlsx(table3, file="tables_figures/table3.xlsx")
+# reload into R in xlsx format
+wb <- openxlsx::loadWorkbook(file="tables_figures/table3.xlsx")
+# set column width for PARAMETER to 40
+openxlsx::setColWidths(wb, 
+                       sheet = 1,
+                       cols = 1, 
+                       widths=50)
+# set column width for model estimates to 20
+openxlsx::setColWidths(wb, 
+                       sheet = 1,
+                       cols = 2, 
+                       widths=30)
+# change font size to 10 with Arial style
+modifyBaseFont(wb, 
+               fontSize = 10, 
+               fontColour = "black", 
+               fontName = "Times New Roman")
+
+# bold text
+boldStyle <- createStyle(textDecoration = "Bold")
+# center-aligned text
+centerStyle <- createStyle(halign = "CENTER")
+# bold and center-aligned
+boldCenterStyle <- createStyle(textDecoration = "Bold",
+                               halign = "CENTER")
+
+# apply styles
+addStyle(wb,
+         rows = c(1,2,6,13,20),
+         cols = 1,
+         sheet = 1,
+         style = boldStyle)
+addStyle(wb,
+         cols = 2,
+         rows = 2:27,
+         sheet = 1,
+         style = centerStyle,
+         gridExpand = TRUE)
+addStyle(wb,
+         rows = c(1,3,7,9,11,14,16,21,23,27),
+         cols = 2,
+         sheet = 1,
+         style = boldCenterStyle,
+         gridExpand = TRUE)
+
+# save the final excel workbook
+openxlsx::saveWorkbook(wb, 
+                       file="tables_figures/table3.xlsx", 
+                       overwrite = TRUE)
+
+```
+
+# Regression diagnostics
+
+## Model 1
+
+```{r}
+
+# R-hat values
+model1_rhat <- format(round(fit_totalEffect$rhats[c(1:3,5)], 2),nsmall=2)
+model1_rhat <- cbind(c(1:10), model1_rhat)
+colnames(model1_rhat) <- c("Imputation",
+                                "Intercept",
+                                "Time",
+                                "PMC Homonegative school climate",
+                                "GMC Age")
+# save as a .xlsx file
+openxlsx::write.xlsx(model1_rhat,
+                     file="convergence_diagnostics/model1_rhat.xlsx")
+
+
+# Trace plots
+mcmc_trace(fit_totalEffect, 
+           pars=c("b_Intercept", 
+                  "b_time", 
+                  "b_personMeanCenter_hscpct", 
+                  "b_grandMeanCenter_age")) +
+  ggtitle("Model 1 trace plots")
+
+# Posterior predictive check
+pp_check(fit_totalEffect, resp="bddbin2", ndraws=5,
+         type="hist", binwidth=1) +
+  ggtitle("Model 1 posterior predictive check: Probable BDD",
+          subtitle="5 simulated posterior draws (Poisson distribution)")
+
+# skewness/kurtosis
+# extract posterior samples
+model1_intercept <- posterior_samples(fit_totalEffect,
+                                      pars=c("b_Intercept"))
+model1_time <- posterior_samples(fit_totalEffect,
+                                      pars=c("b_time"))
+model1_hsc <- posterior_samples(fit_totalEffect,
+                                      pars=c("b_personMeanCenter_hscpct"))
+model1_age <- posterior_samples(fit_totalEffect,
+                                      pars=c("b_grandMeanCenter_age"))
+
+# create matrix of values
+model1_skewKurt <- as.data.frame(matrix(nrow=4,ncol=3))
+colnames(model1_skewKurt) <- c("Parameter",
+                               "Skewness",
+                               "Kurtosis")
+model1_skewKurt[,1] <- c("Intercept",
+                               "Time",
+                               "PMC homonegative school climate",
+                               "GMC age")
+# assign values to matrix cells
+model1_skewKurt[1,2] <- skew(model1_intercept)
+model1_skewKurt[1,3] <- kurtosi(model1_intercept)
+model1_skewKurt[2,2] <- skew(model1_time)
+model1_skewKurt[2,3] <- kurtosi(model1_time)
+model1_skewKurt[3,2] <- skew(model1_hsc)
+model1_skewKurt[3,3] <- kurtosi(model1_hsc)
+model1_skewKurt[4,2] <- skew(model1_age)
+model1_skewKurt[4,3] <- kurtosi(model1_age)
+
+# save as a .xlsx file
+openxlsx::write.xlsx(model1_skewKurt,
+                     file="convergence_diagnostics/model1_skewKurt.xlsx")
+
+
+# quantile-quantile (Q-Q) plots
+qqnorm(model1_intercept$b_Intercept) 
+qqline(model1_intercept$b_Intercept, col="steelblue", lwd=2)
+qqnorm(model1_time$b_time) 
+qqline(model1_time$b_time, col="steelblue", lwd=2)
+qqnorm(model1_hsc$b_personMeanCenter_hscpct) 
+qqline(model1_hsc$b_personMeanCenter_hscpct, col="steelblue", lwd=2)
+qqnorm(model1_age$b_grandMeanCenter_age) 
+qqline(model1_age$b_grandMeanCenter_age, col="steelblue", lwd=2)
+
+
+```
+
+## Model 2
+
+```{r}
+
+# R-hat values
+model2_rhat <- format(round(fit_internalizedHomonegativity$rhats[c(1:3,5,7)], 2),nsmall=2)
+model2_rhat <- cbind(c(1:10), model2_rhat)
+colnames(model2_rhat) <- c("Imputation",
+                           "Intercept",
+                           "Time",
+                           "PMC Homonegative school climate",
+                           "PMC Internalized homonegativity",
+                           "GMC Age")
+# save as a .xlsx file
+openxlsx::write.xlsx(model2_rhat,
+                     file="convergence_diagnostics/model2_rhat.xlsx")
+
+
+# Trace plots
+mcmc_trace(fit_internalizedHomonegativity, 
+           pars=c("b_Intercept", 
+                  "b_time", 
+                  "b_personMeanCenter_hscpct",
+                  "b_personMeanCenter_ihpct",
+                  "b_grandMeanCenter_age")) +
+  ggtitle("Model 2 trace plots")
+
+# Posterior predictive check
+pp_check(fit_internalizedHomonegativity, resp="bddbin2", ndraws=5,
+         type="hist", binwidth=1) +
+  ggtitle("Model 2 posterior predictive check: Probable BDD",
+          subtitle="5 simulated posterior draws (Poisson distribution)")
+
+# skewness/kurtosis
+# extract posterior samples
+model2_intercept <- posterior_samples(fit_internalizedHomonegativity,
+                                      pars=c("b_Intercept"))
+model2_time <- posterior_samples(fit_internalizedHomonegativity,
+                                      pars=c("b_time"))
+model2_hsc <- posterior_samples(fit_internalizedHomonegativity,
+                                      pars=c("b_personMeanCenter_hscpct"))
+model2_ih <- posterior_samples(fit_internalizedHomonegativity,
+                                      pars=c("b_personMeanCenter_ihpct"))
+model2_age <- posterior_samples(fit_internalizedHomonegativity,
+                                      pars=c("b_grandMeanCenter_age"))
+
+# create matrix of values
+model2_skewKurt <- as.data.frame(matrix(nrow=5,ncol=3))
+colnames(model2_skewKurt) <- c("Parameter",
+                               "Skewness",
+                               "Kurtosis")
+model2_skewKurt[,1] <- c("Intercept",
+                         "Time",
+                         "PMC homonegative school climate",
+                         "PMC internalized homonegativity",
+                         "GMC age")
+# assign values to matrix cells
+model2_skewKurt[1,2] <- skew(model2_intercept)
+model2_skewKurt[1,3] <- kurtosi(model2_intercept)
+model2_skewKurt[2,2] <- skew(model2_time)
+model2_skewKurt[2,3] <- kurtosi(model2_time)
+model2_skewKurt[3,2] <- skew(model2_hsc)
+model2_skewKurt[3,3] <- kurtosi(model2_hsc)
+model2_skewKurt[4,2] <- skew(model2_ih)
+model2_skewKurt[4,3] <- kurtosi(model2_ih)
+model2_skewKurt[5,2] <- skew(model2_age)
+model2_skewKurt[5,3] <- kurtosi(model2_age)
+
+# save as a .xlsx file
+openxlsx::write.xlsx(model2_skewKurt,
+                     file="convergence_diagnostics/model2_skewKurt.xlsx")
+
+
+# quantile-quantile (Q-Q) plots
+qqnorm(model2_intercept$b_Intercept) 
+qqline(model2_intercept$b_Intercept, col="steelblue", lwd=2)
+qqnorm(model2_time$b_time) 
+qqline(model2_time$b_time, col="steelblue", lwd=2)
+qqnorm(model2_hsc$b_personMeanCenter_hscpct) 
+qqline(model2_hsc$b_personMeanCenter_hscpct, col="steelblue", lwd=2)
+qqnorm(model2_ih$b_personMeanCenter_ihpct) 
+qqline(model2_ih$b_personMeanCenter_ihpct, col="steelblue", lwd=2)
+qqnorm(model2_age$b_grandMeanCenter_age) 
+qqline(model2_age$b_grandMeanCenter_age, col="steelblue", lwd=2)
+
+```
+
+## Model 3
+
+```{r}
+
+# R-hat values
+model3_rhat <- format(round(fit_negativeExpectancies$rhats[c(1:3,5,7)], 2),nsmall=2)
+model3_rhat <- cbind(c(1:10), model3_rhat)
+colnames(model3_rhat) <- c("Imputation",
+                           "Intercept",
+                           "Time",
+                           "PMC Homonegative school climate",
+                           "PMC Negative expectancies",
+                           "GMC Age")
+# save as a .xlsx file
+openxlsx::write.xlsx(model3_rhat,
+                     file="convergence_diagnostics/model3_rhat.xlsx")
+
+
+# Trace plots
+mcmc_trace(fit_negativeExpectancies, 
+           pars=c("b_Intercept", 
+                  "b_time", 
+                  "b_personMeanCenter_hscpct", 
+                  "b_personMeanCenter_nepct",
+                  "b_grandMeanCenter_age")) +
+  ggtitle("Model 3 trace plots")
+
+# Posterior predictive check
+pp_check(fit_negativeExpectancies, resp="bddbin2", ndraws=5,
+         type="hist", binwidth=1) +
+  ggtitle("Model 3 posterior predictive check: Probable BDD",
+          subtitle="5 simulated posterior draws (Poisson distribution)")
+
+# skewness/kurtosis
+# extract posterior samples
+model3_intercept <- posterior_samples(fit_negativeExpectancies,
+                                      pars=c("b_Intercept"))
+model3_time <- posterior_samples(fit_negativeExpectancies,
+                                      pars=c("b_time"))
+model3_hsc <- posterior_samples(fit_negativeExpectancies,
+                                      pars=c("b_personMeanCenter_hscpct"))
+model3_ne <- posterior_samples(fit_negativeExpectancies,
+                                      pars=c("b_personMeanCenter_nepct"))
+model3_age <- posterior_samples(fit_negativeExpectancies,
+                                      pars=c("b_grandMeanCenter_age"))
+
+# create matrix of values
+model3_skewKurt <- as.data.frame(matrix(nrow=5,ncol=3))
+colnames(model3_skewKurt) <- c("Parameter",
+                               "Skewness",
+                               "Kurtosis")
+model3_skewKurt[,1] <- c("Intercept",
+                         "Time",
+                         "PMC homonegative school climate",
+                         "PMC Negative expectancies",
+                         "GMC age")
+# assign values to matrix cells
+model3_skewKurt[1,2] <- skew(model3_intercept)
+model3_skewKurt[1,3] <- kurtosi(model3_intercept)
+model3_skewKurt[2,2] <- skew(model3_time)
+model3_skewKurt[2,3] <- kurtosi(model3_time)
+model3_skewKurt[3,2] <- skew(model3_hsc)
+model3_skewKurt[3,3] <- kurtosi(model3_hsc)
+model3_skewKurt[4,2] <- skew(model3_ne)
+model3_skewKurt[4,3] <- kurtosi(model3_ne)
+model3_skewKurt[5,2] <- skew(model3_age)
+model3_skewKurt[5,3] <- kurtosi(model3_age)
+
+# save as a .xlsx file
+openxlsx::write.xlsx(model3_skewKurt,
+                     file="convergence_diagnostics/model3_skewKurt.xlsx")
+
+
+# quantile-quantile (Q-Q) plots
+qqnorm(model3_intercept$b_Intercept) 
+qqline(model3_intercept$b_Intercept, col="steelblue", lwd=2)
+qqnorm(model3_time$b_time) 
+qqline(model3_time$b_time, col="steelblue", lwd=2)
+qqnorm(model3_hsc$b_personMeanCenter_hscpct) 
+qqline(model3_hsc$b_personMeanCenter_hscpct, col="steelblue", lwd=2)
+qqnorm(model3_ne$b_personMeanCenter_nepct) 
+qqline(model3_ne$b_personMeanCenter_nepct, col="steelblue", lwd=2)
+qqnorm(model3_age$b_grandMeanCenter_age) 
+qqline(model3_age$b_grandMeanCenter_age, col="steelblue", lwd=2)
+
+```
+
+## Model 4
+
+```{r}
+
+# R-hat values
+model4_rhat <- format(round(fit_indirectOverall$rhats[c(1:3,5,7,9)], 2),nsmall=2)
+model4_rhat <- cbind(c(1:10), model4_rhat)
+colnames(model4_rhat) <- c("Imputation",
+                           "Intercept",
+                           "Time",
+                           "PMC Homonegative school climate",
+                           "PMC Internalized homonegativity",
+                           "PMC Negative expectancies",
+                           "GMC Age")
+# save as a .xlsx file
+openxlsx::write.xlsx(model4_rhat,
+                     file="convergence_diagnostics/model4_rhat.xlsx")
+
+
+# Trace plots
+mcmc_trace(fit_indirectOverall, 
+           pars=c("b_Intercept", 
+                  "b_time", 
+                  "b_personMeanCenter_hscpct", 
+                  "b_personMeanCenter_ihpct",
+                  "b_personMeanCenter_nepct",
+                  "b_grandMeanCenter_age")) +
+  ggtitle("Model 4 trace plots")
+
+# Posterior predictive check
+pp_check(fit_indirectOverall, resp="bddbin2", ndraws=5,
+         type="hist", binwidth=1) +
+  ggtitle("Model 4 posterior predictive check: Probable BDD",
+          subtitle="5 simulated posterior draws (Poisson distribution)")
+
+# skewness/kurtosis
+# extract posterior samples
+model4_intercept <- posterior_samples(fit_indirectOverall,
+                                      pars=c("b_Intercept"))
+model4_time <- posterior_samples(fit_indirectOverall,
+                                      pars=c("b_time"))
+model4_hsc <- posterior_samples(fit_indirectOverall,
+                                      pars=c("b_personMeanCenter_hscpct"))
+model4_ih <- posterior_samples(fit_indirectOverall,
+                                      pars=c("b_personMeanCenter_ihpct"))
+model4_ne <- posterior_samples(fit_indirectOverall,
+                                      pars=c("b_personMeanCenter_nepct"))
+model4_age <- posterior_samples(fit_indirectOverall,
+                                      pars=c("b_grandMeanCenter_age"))
+
+# create matrix of values
+model4_skewKurt <- as.data.frame(matrix(nrow=6,ncol=3))
+colnames(model4_skewKurt) <- c("Parameter",
+                               "Skewness",
+                               "Kurtosis")
+model4_skewKurt[,1] <- c("Intercept",
+                         "Time",
+                         "PMC homonegative school climate",
+                         "PMC Internalized homonegativity",
+                         "PMC Negative expectancies",
+                         "GMC age")
+# assign values to matrix cells
+model4_skewKurt[1,2] <- skew(model4_intercept)
+model4_skewKurt[1,3] <- kurtosi(model4_intercept)
+model4_skewKurt[2,2] <- skew(model4_time)
+model4_skewKurt[2,3] <- kurtosi(model4_time)
+model4_skewKurt[3,2] <- skew(model4_hsc)
+model4_skewKurt[3,3] <- kurtosi(model4_hsc)
+model4_skewKurt[4,2] <- skew(model4_ih)
+model4_skewKurt[4,3] <- kurtosi(model4_ih)
+model4_skewKurt[5,2] <- skew(model4_ne)
+model4_skewKurt[5,3] <- kurtosi(model4_ne)
+model4_skewKurt[6,2] <- skew(model4_age)
+model4_skewKurt[6,3] <- kurtosi(model4_age)
+
+# save as a .xlsx file
+openxlsx::write.xlsx(model4_skewKurt,
+                     file="convergence_diagnostics/model4_skewKurt.xlsx")
+
+
+# quantile-quantile (Q-Q) plots
+qqnorm(model4_intercept$b_Intercept) 
+qqline(model4_intercept$b_Intercept, col="steelblue", lwd=2)
+qqnorm(model4_time$b_time) 
+qqline(model4_time$b_time, col="steelblue", lwd=2)
+qqnorm(model4_hsc$b_personMeanCenter_hscpct) 
+qqline(model4_hsc$b_personMeanCenter_hscpct, col="steelblue", lwd=2)
+qqnorm(model4_ih$b_personMeanCenter_ihpct) 
+qqline(model4_ih$b_personMeanCenter_ihpct, col="steelblue", lwd=2)
+qqnorm(model4_ne$b_personMeanCenter_nepct) 
+qqline(model4_ne$b_personMeanCenter_nepct, col="steelblue", lwd=2)
+qqnorm(model4_age$b_grandMeanCenter_age) 
+qqline(model4_age$b_grandMeanCenter_age, col="steelblue", lwd=2)
+
+```
+
+
