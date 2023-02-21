@@ -9,7 +9,7 @@ McGuire, F.H., Goldbach, J.T., Senese IV, J.G., Cabrera Jr., J.R., Schrager, S.M
   </p>
 This work was supported through funding from the National Insitutes of Health:
 <li> National Institute of Minority Health and Health Disparities (grant number 1R01MD012252, PI: Goldbach)</li>
-<li> National Institute of Mental Health (grant number T32MH19960, PI: Cabassa)</li>
+<li> National Institute of Mental Health (grant number T32MH019960, PI: Cabassa)</li>
 
 ## Structure of files in this respository
 <ol>
