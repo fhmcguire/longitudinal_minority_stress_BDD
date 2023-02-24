@@ -233,7 +233,7 @@ model3_percent_s1 <- model3_difference_s1/model1_beta_samples_s1
 model4_percent_s1 <- model4_difference_s1/model1_beta_samples_s1
 
 
-# Create a matrix called "percent" to hold indirect effect estimates
+# Create a matrix to hold indirect effect estimates
 indirect_s1 <- as.data.frame(matrix(nrow=3, ncol=3))
 colnames(indirect_s1) <- c("mean", "LB", "UB")
 rownames(indirect_s1) <-  c("Model 2",
@@ -266,7 +266,7 @@ indirect_s1 <- indirect_s1 %>%
 
 
 
-# Create a matrix called "percent" to hold percentage mediated estimates
+# Create a matrix to hold percentage mediated estimates
 percent_s1 <- as.data.frame(matrix(nrow=3, ncol=3))
 colnames(percent_s1) <- c("mean", "LB", "UB")
 rownames(percent_s1) <-  c("Model 2",
@@ -586,7 +586,7 @@ model3_percent_s2 <- model3_difference_s2/model1_beta_samples_s2
 model4_percent_s2 <- model4_difference_s2/model1_beta_samples_s2
 
 
-# Create a matrix called "percent" to hold indirect effect estimates
+# Create a matrix to hold indirect effect estimates
 indirect_s2 <- as.data.frame(matrix(nrow=3, ncol=3))
 colnames(indirect_s2) <- c("mean", "LB", "UB")
 rownames(indirect_s2) <-  c("Model 2",
@@ -619,7 +619,7 @@ indirect_s2 <- indirect_s2 %>%
 
 
 
-# Create a matrix called "percent" to hold percentage mediated estimates
+# Create a matrix to hold percentage mediated estimates
 percent_s2 <- as.data.frame(matrix(nrow=3, ncol=3))
 colnames(percent_s2) <- c("mean", "LB", "UB")
 rownames(percent_s2) <-  c("Model 2",
