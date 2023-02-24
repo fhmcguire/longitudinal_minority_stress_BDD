@@ -673,7 +673,7 @@ model4_NEvar <-
 
 
 
-# Create a matrix called "variance" to hold Level 2 variance estimates
+# Create a matrix to hold Level 2 variance estimates
 variance <- matrix(nrow=8, ncol=1)
 colnames(variance) <- c("variance")
 rownames(variance) <- c("Model 1: HSC",
@@ -730,7 +730,7 @@ model3_percent <- model3_difference/model1_beta_samples
 model4_percent <- model4_difference/model1_beta_samples
 
 
-# Create a matrix called "percent" to hold indirect effect estimates
+# Create a matrix to hold indirect effect estimates
 indirect <- as.data.frame(matrix(nrow=3, ncol=3))
 colnames(indirect) <- c("mean", "LB", "UB")
 rownames(indirect) <- c("Model 2",
@@ -763,7 +763,7 @@ indirect <- indirect %>%
 
 
 
-# Create a matrix called "percent" to hold percentage mediated estimates
+# Create a matrix to hold percentage mediated estimates
 percent <- as.data.frame(matrix(nrow=3, ncol=3))
 colnames(percent) <- c("mean", "LB", "UB")
 rownames(percent) <- c("Model 2",
