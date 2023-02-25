@@ -39,6 +39,6 @@ This work was supported through funding from the National Insitutes of Health:
   <ul>
     <li>Summarize results from sensitivity analysis 1 (including fixed effects of race/ethnicity and gender identity).</li>
     <li>Summarize results from sensitivity analysis 2 (respecifying the main analysis model with binary minority stress predictor variables).</li>
-    <li>Respecify and report prevalence estiamtes where the "probable BDD" outcome variable includes those who primary concern was being "too fat" or "not thin enough."</li>
+    <li>Respecify and report prevalence estimates where the "probable BDD" outcome variable includes those who primary concern was being "too fat" or "not thin enough."</li>
   </ul>
 </ol>
